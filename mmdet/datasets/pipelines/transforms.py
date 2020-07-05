@@ -24,7 +24,6 @@ except ImportError:
 @PIPELINES.register_module()
 class Resize(object):
     """Resize images & bbox & mask.
-
     This transform resizes the input image to some scale. Bboxes and masks are
     then resized with the same scale factor. If the input dict contains the key
     "scale", then the scale in the input dict is used, otherwise the specified
@@ -32,17 +31,14 @@ class Resize(object):
     "scale_factor" (if MultiScaleFlipAug does not give img_scale but
     scale_factor), the actual scale will be computed by image shape and
     scale_factor.
-
     `img_scale` can either be a tuple (single-scale) or a list of tuple
     (multi-scale). There are 3 multiscale modes:
-
     - ``ratio_range is not None``: randomly sample a ratio from the ratio range
       and multiply it with the image scale.
     - ``ratio_range is None`` and ``multiscale_mode == "range"``: randomly
       sample a scale from the multiscale range.
     - ``ratio_range is None`` and ``multiscale_mode == "value"``: randomly
       sample a scale from multiple scales.
-
     Args:
         img_scale (tuple or list[tuple]): Images scales for resizing.
         multiscale_mode (str): Either "range" or "value".
@@ -79,10 +75,8 @@ class Resize(object):
     @staticmethod
     def random_select(img_scales):
         """Randomly select an img_scale from given candidates.
-
         Args:
             img_scales (list[tuple]): Images scales for selection.
-
         Returns:
             (tuple, int): Returns a tuple ``(img_scale, scale_dix)``,
                 where ``img_scale`` is the selected image scale and
@@ -97,12 +91,10 @@ class Resize(object):
     @staticmethod
     def random_sample(img_scales):
         """Randomly sample an img_scale when ``multiscale_mode=='range'``.
-
         Args:
             img_scales (list[tuple]): Images scale range for sampling.
                 There must be two tuples in img_scales, which specify the lower
                 and uper bound of image scales.
-
         Returns:
             (tuple, None): Returns a tuple ``(img_scale, None)``, where
                 ``img_scale`` is sampled scale and None is just a placeholder
@@ -124,16 +116,13 @@ class Resize(object):
     @staticmethod
     def random_sample_ratio(img_scale, ratio_range):
         """Randomly sample an img_scale when ``ratio_range`` is specified.
-
         A ratio will be randomly sampled from the range specified by
         ``ratio_range``. Then it would be multiplied with ``img_scale`` to
         generate sampled scale.
-
         Args:
             img_scale (tuple): Images scale base to multiply with ratio.
             ratio_range (tuple[float]): The minimum and maximum ratio to scale
                 the ``img_scale``.
-
         Returns:
             (tuple, None): Returns a tuple ``(scale, None)``, where
                 ``scale`` is sampled ratio multiplied with ``img_scale`` and
@@ -151,16 +140,13 @@ class Resize(object):
     def _random_scale(self, results):
         """Randomly sample an img_scale according to ``ratio_range`` and
         ``multiscale_mode``.
-
         If ``ratio_range`` is specified, a ratio will be sampled and be
         multiplied with ``img_scale``.
         If multiple scales are specified by ``img_scale``, a scale will be
         sampled according to ``multiscale_mode``.
         Otherwise, single scale will be used.
-
         Args:
             results (dict): Result dict from :obj:`dataset`.
-
         Returns:
             dict: Two new keys 'scale` and 'scale_idx` are added into
                 ``results``, which would be used by subsequent pipelines.
@@ -239,10 +225,8 @@ class Resize(object):
     def __call__(self, results):
         """Call function to resize images, bounding boxes, masks, semantic
         segmentation map.
-
         Args:
             results (dict): Result dict from loading pipeline.
-
         Returns:
             dict: Resized results, 'img_shape', 'pad_shape', 'scale_factor',
                 'keep_ratio' keys are added into result dict.
@@ -259,7 +243,8 @@ class Resize(object):
                 self._random_scale(results)
         else:
             assert 'scale_factor' not in results, (
-                "scale and scale_factor cannot be both set.")
+                'scale and scale_factor cannot be both set.')
+
         self._resize_img(results)
         self._resize_bboxes(results)
         self._resize_masks(results)
@@ -278,11 +263,9 @@ class Resize(object):
 @PIPELINES.register_module()
 class RandomFlip(object):
     """Flip the image & bbox & mask.
-
     If the input dict contains the key "flip", then the flag will be used,
     otherwise it will be randomly decided by a ratio specified in the init
     method.
-
     Args:
         flip_ratio (float, optional): The flipping probability. Default: None.
         direction(str, optional): The flipping direction. Options are
@@ -298,13 +281,11 @@ class RandomFlip(object):
 
     def bbox_flip(self, bboxes, img_shape, direction):
         """Flip bboxes horizontally.
-
         Args:
             bboxes (numpy.ndarray): Bounding boxes, shape (..., 4*k)
             img_shape (tuple[int]): Image shape (height, width)
             direction (str): Flip direction. Options are 'horizontal',
                 'vertical'.
-
         Returns:
             numpy.ndarray: Flipped bounding boxes.
         """
@@ -326,10 +307,8 @@ class RandomFlip(object):
     def __call__(self, results):
         """Call function to flip bounding boxes, masks, semantic segmentation
         maps.
-
         Args:
             results (dict): Result dict from loading pipeline.
-
         Returns:
             dict: Flipped results, 'flip', 'flip_direction' keys are added into
                 result dict.
@@ -367,11 +346,9 @@ class RandomFlip(object):
 @PIPELINES.register_module()
 class Pad(object):
     """Pad the image & mask.
-
     There are two padding modes: (1) pad to a fixed size and (2) pad to the
     minimum size that is divisible by some number.
     Added keys are "pad_shape", "pad_fixed_size", "pad_size_divisor",
-
     Args:
         size (tuple, optional): Fixed padding size.
         size_divisor (int, optional): The divisor of padded size.
@@ -390,7 +367,8 @@ class Pad(object):
         """Pad images according to ``self.size``."""
         for key in results.get('img_fields', ['img']):
             if self.size is not None:
-                padded_img = mmcv.impad(results[key], self.size, self.pad_val)
+                padded_img = mmcv.impad(
+                    results[key], shape=self.size, pad_val=self.pad_val)
             elif self.size_divisor is not None:
                 padded_img = mmcv.impad_to_multiple(
                     results[key], self.size_divisor, pad_val=self.pad_val)
@@ -409,17 +387,15 @@ class Pad(object):
         """Pad semantic segmentation map according to
         ``results['pad_shape']``."""
         for key in results.get('seg_fields', []):
-            results[key] = mmcv.impad(results[key], results['pad_shape'][:2])
+            results[key] = mmcv.impad(
+                results[key], shape=results['pad_shape'][:2])
 
     def __call__(self, results):
         """Call function to pad images, masks, semantic segmentation maps.
-
         Args:
             results (dict): Result dict from loading pipeline.
-
         Returns:
             dict: Updated result dict.
-
         """
         self._pad_img(results)
         self._pad_masks(results)
@@ -437,9 +413,7 @@ class Pad(object):
 @PIPELINES.register_module()
 class Normalize(object):
     """Normalize the image.
-
     Added key is "img_norm_cfg".
-
     Args:
         mean (sequence): Mean values of 3 channels.
         std (sequence): Std values of 3 channels.
@@ -454,14 +428,11 @@ class Normalize(object):
 
     def __call__(self, results):
         """Call function to normalize images.
-
         Args:
             results (dict): Result dict from loading pipeline.
-
         Returns:
             dict: Normalized results, 'img_norm_cfg' key is added into
                 result dict.
-
         """
         for key in results.get('img_fields', ['img']):
             results[key] = mmcv.imnormalize(results[key], self.mean, self.std,
@@ -479,10 +450,8 @@ class Normalize(object):
 @PIPELINES.register_module()
 class RandomCrop(object):
     """Random crop the image & bboxes & masks.
-
     Args:
         crop_size (tuple): Expected size after cropping, (h, w).
-
     Notes:
         - If the image is smaller than the crop size, return the original image
         - The keys for bboxes, labels and masks must be aligned. That is,
@@ -509,10 +478,8 @@ class RandomCrop(object):
     def __call__(self, results):
         """Call function to randomly crop images, bounding boxes, masks,
         semantic segmentation maps.
-
         Args:
             results (dict): Result dict from loading pipeline.
-
         Returns:
             dict: Randomly cropped results, 'img_shape' key in result dict is
                 updated according to crop size.
@@ -543,7 +510,7 @@ class RandomCrop(object):
             bboxes[:, 0::2] = np.clip(bboxes[:, 0::2], 0, img_shape[1])
             bboxes[:, 1::2] = np.clip(bboxes[:, 1::2], 0, img_shape[0])
             valid_inds = (bboxes[:, 2] > bboxes[:, 0]) & (
-                bboxes[:, 3] > bboxes[:, 1])
+                    bboxes[:, 3] > bboxes[:, 1])
             # When there is no gt bbox, cropping is conducted.
             # When the crop is valid, cropping is conducted.
             if len(valid_inds) == 0 or valid_inds.any():
@@ -559,7 +526,7 @@ class RandomCrop(object):
             if mask_key in results:
                 results[mask_key] = results[mask_key][
                     valid_inds.nonzero()[0]].crop(
-                        np.asarray([crop_x1, crop_y1, crop_x2, crop_y2]))
+                    np.asarray([crop_x1, crop_y1, crop_x2, crop_y2]))
 
         # if no gt bbox remains after cropping, just skip this image
         # TODO: check whether we can keep the image regardless of the crop.
@@ -579,7 +546,6 @@ class RandomCrop(object):
 @PIPELINES.register_module()
 class SegRescale(object):
     """Rescale semantic segmentation maps.
-
     Args:
         scale_factor (float): The scale factor of the final output.
     """
@@ -588,11 +554,9 @@ class SegRescale(object):
         self.scale_factor = scale_factor
 
     def __call__(self, results):
-        """Call function to scale the semantic segmentation map
-
+        """Call function to scale the semantic segmentation map.
         Args:
             results (dict): Result dict from loading pipeline.
-
         Returns:
             dict: Result dict with semantic segmentation map scaled.
         """
@@ -612,7 +576,6 @@ class PhotoMetricDistortion(object):
     """Apply photometric distortion to image sequentially, every transformation
     is applied with a probability of 0.5. The position of random contrast is in
     second or second to last.
-
     1. random brightness
     2. random contrast (mode 0)
     3. convert color from BGR to HSV
@@ -621,7 +584,6 @@ class PhotoMetricDistortion(object):
     6. convert color from HSV to BGR
     7. random contrast (mode 1)
     8. randomly swap channels
-
     Args:
         brightness_delta (int): delta of brightness.
         contrast_range (tuple): range of contrast.
@@ -641,10 +603,8 @@ class PhotoMetricDistortion(object):
 
     def __call__(self, results):
         """Call function to perform photometric distortion on images.
-
         Args:
             results (dict): Result dict from loading pipeline.
-
         Returns:
             dict: Result dict with images distorted.
         """
@@ -654,7 +614,7 @@ class PhotoMetricDistortion(object):
                 'Only single img_fields is allowed'
         img = results['img']
         assert img.dtype == np.float32, \
-            'PhotoMetricDistortion needs the input image of dtype np.float32,'\
+            'PhotoMetricDistortion needs the input image of dtype np.float32,' \
             ' please set "to_float32=True" in "LoadImageFromFile" pipeline'
         # random brightness
         if random.randint(2):
@@ -716,10 +676,8 @@ class PhotoMetricDistortion(object):
 @PIPELINES.register_module()
 class Expand(object):
     """Random expand the image & bboxes.
-
     Randomly place the original image on a canvas of 'ratio' x original image
     size filled with mean values. The ratio is in the range of ratio_range.
-
     Args:
         mean (tuple): mean value of dataset.
         to_rgb (bool): if need to convert the order of mean to align with RGB.
@@ -745,10 +703,8 @@ class Expand(object):
 
     def __call__(self, results):
         """Call function to expand images, bounding boxes.
-
         Args:
             results (dict): Result dict from loading pipeline.
-
         Returns:
             dict: Result dict with images, bounding boxes expanded
         """
@@ -804,13 +760,11 @@ class MinIoURandomCrop(object):
     """Random crop the image & bboxes, the cropped patches have minimum IoU
     requirement with original image & bboxes, the IoU threshold is randomly
     selected from min_ious.
-
     Args:
         min_ious (tuple): minimum IoU threshold for all intersections with
         bounding boxes
         min_crop_size (float): minimum crop's size (i.e. h,w := a*h, a*w,
         where a >= min_crop_size).
-
     Notes:
         The keys for bboxes, labels and masks should be paired. That is,
         `gt_bboxes` corresponds to `gt_labels` and `gt_masks`, and
@@ -834,10 +788,8 @@ class MinIoURandomCrop(object):
     def __call__(self, results):
         """Call function to crop images and bounding boxes with minimum IoU
         constraint.
-
         Args:
             results (dict): Result dict from loading pipeline.
-
         Returns:
             dict: Result dict with images and bounding boxes cropped,
                 'img_shape' key is updated.
@@ -921,7 +873,7 @@ class MinIoURandomCrop(object):
                 # seg fields
                 for key in results.get('seg_fields', []):
                     results[key] = results[key][patch[1]:patch[3],
-                                                patch[0]:patch[2]]
+                                   patch[0]:patch[2]]
                 return results
 
     def __repr__(self):
@@ -934,10 +886,8 @@ class MinIoURandomCrop(object):
 @PIPELINES.register_module()
 class Corrupt(object):
     """Corruption augmentation.
-
     Corruption transforms implemented based on
     `imagecorruptions <https://github.com/bethgelab/imagecorruptions>`_.
-
     Args:
         corruption (str): Corruption name.
         severity (int, optional): The severity of corruption. Default: 1.
@@ -949,10 +899,8 @@ class Corrupt(object):
 
     def __call__(self, results):
         """Call function to corrupt image.
-
         Args:
             results (dict): Result dict from loading pipeline.
-
         Returns:
             dict: Result dict with images corrupted.
         """
@@ -978,15 +926,11 @@ class Corrupt(object):
 @PIPELINES.register_module()
 class Albu(object):
     """Albumentation augmentation.
-
     Adds custom transformations from Albumentations library.
     Please, visit `https://albumentations.readthedocs.io`
     to get more information.
-
     An example of ``transforms`` is as followed:
-
     .. code-block::
-
         [
             dict(
                 type='ShiftScaleRotate',
@@ -1009,7 +953,6 @@ class Albu(object):
                 ],
                 p=0.1),
         ]
-
     Args:
         transforms (list[dict]): A list of albu transformations
         bbox_params (dict): Bbox_params for albumentation `Compose`
@@ -1057,8 +1000,7 @@ class Albu(object):
 
     def albu_builder(self, cfg):
         """Import a module from albumentations.
-        Inherits some of `build_from_cfg` logic.
-
+        It inherits some of :func:`build_from_cfg` logic.
         Args:
             cfg (dict): Config dict. It should at least contain the key "type".
         Returns:
@@ -1089,10 +1031,7 @@ class Albu(object):
 
     @staticmethod
     def mapper(d, keymap):
-        """
-        Dictionary mapper.
-        Renames keys according to keymap provided.
-
+        """Dictionary mapper. Renames keys according to keymap provided.
         Args:
             d (dict): old dict
             keymap (dict): {'old_key':'new_key'}
@@ -1173,30 +1112,26 @@ class Albu(object):
 @PIPELINES.register_module()
 class RandomCenterCropPad(object):
     """Random center crop and random around padding for CornerNet.
-
     This operation generates randomly cropped image from the original image and
     pads it simultaneously. Different from `RandomCrop`, the output shape may
     not equal to `crop_size` strictly. We choose a random value from `ratios`
     and the output shape could be larger or smaller than `crop_size`. Also the
     pad in this operation is different from `Pad`, actually we use around
     padding instead of right-bottom padding.
-
     The relation between output image (padding image) and original image:
-
-    :code-block:
-                    output image
-           +----------------------------+
-           |          padded area       |
-    +------|----------------------------|----------+
-    |      |         cropped area       |          |
-    |      |         +---------------+  |          |
-    |      |         |    .   center |  |          | original image
-    |      |         |        range  |  |          |
-    |      |         +---------------+  |          |
-    +------|----------------------------|----------+
-           |          padded area       |
-           +----------------------------+
-
+    .. code-block: text
+                        output image
+            +----------------------------+
+            |          padded area       |
+        +------|----------------------------|----------+
+        |      |         cropped area       |          |
+        |      |         +---------------+  |          |
+        |      |         |    .   center |  |          | original image
+        |      |         |        range  |  |          |
+        |      |         +---------------+  |          |
+        +------|----------------------------|----------+
+            |          padded area       |
+            +----------------------------+
     There are 5 main areas in the figure:
         - output image: output image of this operation, also called padding
             image in following instruction.
@@ -1206,10 +1141,8 @@ class RandomCenterCropPad(object):
         - center range: a smaller area where random center chosen from.
             center range is computed by `border` and original image's shape
             to avoid our random center is too close to original image's border.
-
     Also this operation act differently in train and test mode, the summary
     pipeline is listed below.
-
     Train pipeline:
         1. Choose a `random_ratio` from `ratios`, the shape of padding image
             will be `random_ratio * crop_size`.
@@ -1218,14 +1151,12 @@ class RandomCenterCropPad(object):
         4. Initialize the padding image with pixel value equals to `mean`.
         5. Copy the `cropped area` to padding image.
         6. Refine annotations.
-
     Test pipeline:
         1. Compute output shape according to `test_pad_mode`.
         2. Generate padding image with center matches the original image
             center.
         3. Initialize the padding image with pixel value equals to `mean`.
         4. Copy the `cropped area` to padding image.
-
     Args:
         crop_size (tuple | None): expected size after crop, final size will
             computed according to ratio. Requires (h, w) in train mode, and
@@ -1245,7 +1176,6 @@ class RandomCenterCropPad(object):
         test_pad_mode (tuple): padding method and padding shape value, only
             available in test mode. Default is using 'logical_or' with
             127 as padding shape value.
-
             - 'logical_or': final_shape = input_shape | padding_shape_value
             - 'size_divisor': final_shape = int(
                 ceil(input_shape / padding_shape_value) * padding_shape_value)
@@ -1295,12 +1225,10 @@ class RandomCenterCropPad(object):
 
     def _get_border(self, border, size):
         """Get final border for the target size.
-
         This function generates a `final_border` according to image's shape.
         The area between `final_border` and `size - final_border` is the
         `center range`. We randomly choose center from the `center range`
         to avoid our random center is too close to original image's border.
-
         Args:
             border (int): The initial border, default is 128.
             size (int): The width or height of original image.
@@ -1312,7 +1240,6 @@ class RandomCenterCropPad(object):
 
     def _filter_boxes(self, patch, boxes):
         """Check whether the center of each box is in the patch.
-
         Args:
             patch (list[int]): The cropped area, [left, top, right, bottom].
             boxes (numpy array, (N x 4)): Ground truth boxes.
@@ -1321,20 +1248,18 @@ class RandomCenterCropPad(object):
         """
         center = (boxes[:, :2] + boxes[:, 2:]) / 2
         mask = (center[:, 0] > patch[0]) * (center[:, 1] > patch[1]) * (
-            center[:, 0] < patch[2]) * (
-                center[:, 1] < patch[3])
+                center[:, 0] < patch[2]) * (
+                       center[:, 1] < patch[3])
         return mask
 
     def _crop_image_and_paste(self, image, center, size):
         """Crop image with a given center and size, then paste the cropped
         image to a blank image with two centers align.
-
         This function is equivalent to generating a blank image with `size` as
         its shape. Then cover it on the original image with two centers (
         the center of blank image and the random center of original image)
         aligned. The overlap area is paste from the original image and the
         outside area is filled with `mean pixel`.
-
         Args:
             image (np array, H x W x C): Original image.
             center (list[int]): Target crop center coord.
@@ -1370,13 +1295,12 @@ class RandomCenterCropPad(object):
             cropped_center_y - top, cropped_center_y + bottom,
             cropped_center_x - left, cropped_center_x + right
         ],
-                          dtype=np.float32)
+            dtype=np.float32)
 
         return cropped_img, border, patch
 
     def _train_aug(self, results):
         """Random crop and around padding the original image.
-
         Args:
             results (dict): Image infomations in the augment pipeline.
         Returns:
@@ -1422,7 +1346,7 @@ class RandomCenterCropPad(object):
                     bboxes[:, 0:4:2] = np.clip(bboxes[:, 0:4:2], 0, new_w)
                     bboxes[:, 1:4:2] = np.clip(bboxes[:, 1:4:2], 0, new_h)
                     keep = (bboxes[:, 2] > bboxes[:, 0]) & (
-                        bboxes[:, 3] > bboxes[:, 1])
+                            bboxes[:, 3] > bboxes[:, 1])
                     bboxes = bboxes[keep]
                     results[key] = bboxes
                     if key in ['gt_bboxes']:
@@ -1442,9 +1366,7 @@ class RandomCenterCropPad(object):
 
     def _test_aug(self, results):
         """Around padding the original image without cropping.
-
         The padding mode and value are from `test_pad_mode`.
-
         Args:
             results (dict): Image infomations in the augment pipeline.
         Returns:

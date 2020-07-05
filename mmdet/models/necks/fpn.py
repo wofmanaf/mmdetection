@@ -8,12 +8,9 @@ from ..builder import NECKS
 
 @NECKS.register_module()
 class FPN(nn.Module):
-    """
-    Feature Pyramid Network.
-
+    """Feature Pyramid Network.
     This is an implementation of - Feature Pyramid Networks for Object
     Detection (https://arxiv.org/abs/1612.03144)
-
     Args:
         in_channels (List[int]): Number of input channels per scale.
         out_channels (int): Number of output channels (used at each scale)
@@ -27,7 +24,6 @@ class FPN(nn.Module):
             If True, its actual mode is specified by `extra_convs_on_inputs`.
             If str, it specifies the source feature map of the extra convs.
             Only the following options are allowed
-
             - 'on_input': Last feat map of neck inputs (i.e. backbone feature).
             - 'on_lateral':  Last feature map after lateral convs.
             - 'on_output': The last output feature map after fpn convs.
@@ -45,7 +41,6 @@ class FPN(nn.Module):
             Default: None.
         upsample_cfg (dict): Config dict for interpolate layer.
             Default: `dict(mode='nearest')`
-
     Example:
         >>> import torch
         >>> in_channels = [2, 3, 5, 7]
@@ -157,14 +152,14 @@ class FPN(nn.Module):
 
     # default init_weights for conv(msra) and norm in ConvModule
     def init_weights(self):
-        """Initialize the weights of FPN module"""
+        """Initialize the weights of FPN module."""
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 xavier_init(m, distribution='uniform')
 
     @auto_fp16()
     def forward(self, inputs):
-        """Forward function"""
+        """Forward function."""
         assert len(inputs) == len(self.in_channels)
 
         # build laterals

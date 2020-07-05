@@ -12,6 +12,9 @@ from mmcv.utils import print_log
 from mmdet.core import auto_fp16
 from mmdet.utils import get_root_logger
 
+import cv2
+from mmcv.image import imread, imwrite
+
 
 class BaseDetector(nn.Module, metaclass=ABCMeta):
     """Base class for detectors"""
@@ -158,7 +161,7 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
             assert 'proposals' not in kwargs
             return self.aug_test(imgs, img_metas, **kwargs)
 
-    @auto_fp16(apply_to=('img', ))
+    @auto_fp16(apply_to=('img',))
     def forward(self, img, img_metas, return_loss=True, **kwargs):
         """
         Calls either forward_train or forward_test depending on whether
@@ -261,11 +264,10 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
                     img,
                     result,
                     score_thr=0.3,
-                    bbox_color='green',
-                    text_color='green',
-                    thickness=1,
                     font_scale=0.5,
+                    show_txt=True,
                     win_name='',
+                    theme='black',
                     show=False,
                     wait_time=0,
                     out_file=None):
@@ -277,11 +279,10 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
                 bbox_result or (bbox_result, segm_result).
             score_thr (float, optional): Minimum score of bboxes to be shown.
                 Default: 0.3.
-            bbox_color (str or tuple or :obj:`Color`): Color of bbox lines.
-            text_color (str or tuple or :obj:`Color`): Color of texts.
-            thickness (int): Thickness of lines.
             font_scale (float): Font scales of texts.
+            show_txt (bool): Whether to show the label and confidence.
             win_name (str): The window name.
+            theme (str): Type of themes, currently support ['black', 'white'].
             wait_time (int): Value of waitKey param.
                 Default: 0.
             show (bool): Whether to show the image.
@@ -292,8 +293,10 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
         Returns:
             img (Tensor): Only if not `show` or `out_file`
         """
+        assert theme in ['black', 'white']
         img = mmcv.imread(img)
         img = img.copy()
+
         if isinstance(result, tuple):
             bbox_result, segm_result = result
             if isinstance(segm_result, tuple):
@@ -323,18 +326,18 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
         # if out_file specified, do not show image in window
         if out_file is not None:
             show = False
+
         # draw bounding boxes
-        mmcv.imshow_det_bboxes(
+        self.imshow_det_bboxes(
             img,
             bboxes,
             labels,
             class_names=self.CLASSES,
             score_thr=score_thr,
-            bbox_color=bbox_color,
-            text_color=text_color,
-            thickness=thickness,
             font_scale=font_scale,
+            show_txt=show_txt,
             win_name=win_name,
+            theme=theme,
             show=show,
             wait_time=wait_time,
             out_file=out_file)
@@ -343,3 +346,193 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
             warnings.warn('show==False and out_file is not specified, only '
                           'result image will be returned')
             return img
+
+    def imshow_det_bboxes(self,
+                          img,
+                          bboxes,
+                          labels,
+                          class_names=None,
+                          score_thr=0,
+                          font_scale=1.0,
+                          show_txt=True,
+                          win_name='',
+                          theme='black',
+                          show=True,
+                          wait_time=0,
+                          out_file=None,
+                          ):
+        """Draw bboxes and class labels (with scores) on an image.
+        Args:
+            img (str or ndarray): The image to be displayed.
+            bboxes (ndarray): Bounding boxes (with scores), shaped (n, 4) or
+                (n, 5).
+            labels (ndarray): Labels of bboxes.
+            class_names (list[str]): Names of each classes.
+            score_thr (float): Minimum score of bboxes to be shown.
+            font_scale (float): Font scales of texts.
+            show_txt (bool): Whether to show the label and confidence.
+            win_name (str): The window name.
+            theme (str): Type of themes, currently support ['black', 'white'].
+            show (bool): Whether to show the image.
+            wait_time (int): Value of waitKey param.
+            out_file (str or None): The filename to write the image.
+        """
+        assert bboxes.ndim == 2
+        assert labels.ndim == 1
+        assert bboxes.shape[0] == labels.shape[0]
+        assert bboxes.shape[1] == 4 or bboxes.shape[1] == 5
+        img = imread(img)
+
+        colors = [(color_list[_]).astype(np.uint8) for _ in range(len(color_list))]
+        colors = np.array(colors, dtype=np.uint8).reshape(len(colors), 1, 1, 3)
+
+        if theme == 'white':
+            colors = colors.reshape(-1)[::-1].reshape(len(colors), 1, 1, 3)
+            colors = np.clip(colors, 0., 0.6 * 255).astype(np.uint8)
+
+        if score_thr > 0:
+            assert bboxes.shape[1] == 5
+            scores = bboxes[:, -1]
+            inds = scores > score_thr
+            bboxes = bboxes[inds, :]
+            labels = labels[inds]
+
+        for bbox, label in zip(bboxes, labels):
+            bbox_int = bbox.astype(np.int32)
+            left_top = (bbox_int[0], bbox_int[1])
+            right_bottom = (bbox_int[2], bbox_int[3])
+
+            c = colors[label][0][0].tolist()
+            if theme == 'white':
+                c = (255 - np.array(c)).tolist()
+
+            cv2.rectangle(
+                img, left_top, right_bottom, c, thickness=2)
+
+            label_text = class_names[
+                label] if class_names is not None else f'cls {label}'
+            if len(bbox) > 4:
+                label_text += f'|{bbox[-1]:.02f}'
+
+            font = cv2.FONT_HERSHEY_TRIPLEX
+            cat_size = cv2.getTextSize(label_text, font, font_scale, 2)[0]
+
+            if show_txt:
+                cv2.rectangle(img, (bbox_int[0], bbox_int[1] - cat_size[1] - 2),
+                              (bbox_int[0] + cat_size[0], bbox_int[1] - 2), c, -1)
+
+                cv2.putText(img, label_text, (bbox_int[0], bbox_int[1] - 2),
+                            font, font_scale, (0, 0, 0), thickness=1, lineType=cv2.LINE_AA)
+
+        if show:
+            imshow(img, win_name, wait_time)
+        if out_file is not None:
+            imwrite(img, out_file)
+
+
+def imshow(img, win_name='', wait_time=0):
+    """Show an image.
+    Args:
+        img (str or ndarray): The image to be displayed.
+        win_name (str): The window name.
+        wait_time (int): Value of waitKey param.
+    """
+    cv2.imshow(win_name, imread(img))
+    cv2.imshow(win_name, imread(img))
+    if wait_time == 0:  # prevent from hangning if windows was closed
+        while True:
+            ret = cv2.waitKey(1)
+
+            closed = cv2.getWindowProperty(win_name, cv2.WND_PROP_VISIBLE) < 1
+            # if user closed window or if some key pressed
+            if closed or ret != -1:
+                break
+    else:
+        ret = cv2.waitKey(wait_time)
+
+
+color_list = np.array(
+    [
+        1.000, 1.000, 1.000,
+        0.850, 0.325, 0.098,
+        0.929, 0.694, 0.125,
+        0.494, 0.184, 0.556,
+        0.466, 0.674, 0.188,
+        0.301, 0.745, 0.933,
+        0.635, 0.078, 0.184,
+        0.300, 0.300, 0.300,
+        0.600, 0.600, 0.600,
+        1.000, 0.000, 0.000,
+        1.000, 0.500, 0.000,
+        0.749, 0.749, 0.000,
+        0.000, 1.000, 0.000,
+        0.000, 0.000, 1.000,
+        0.667, 0.000, 1.000,
+        0.333, 0.333, 0.000,
+        0.333, 0.667, 0.000,
+        0.333, 1.000, 0.000,
+        0.667, 0.333, 0.000,
+        0.667, 0.667, 0.000,
+        0.667, 1.000, 0.000,
+        1.000, 0.333, 0.000,
+        1.000, 0.667, 0.000,
+        1.000, 1.000, 0.000,
+        0.000, 0.333, 0.500,
+        0.000, 0.667, 0.500,
+        0.000, 1.000, 0.500,
+        0.333, 0.000, 0.500,
+        0.333, 0.333, 0.500,
+        0.333, 0.667, 0.500,
+        0.333, 1.000, 0.500,
+        0.667, 0.000, 0.500,
+        0.667, 0.333, 0.500,
+        0.667, 0.667, 0.500,
+        0.667, 1.000, 0.500,
+        1.000, 0.000, 0.500,
+        1.000, 0.333, 0.500,
+        1.000, 0.667, 0.500,
+        1.000, 1.000, 0.500,
+        0.000, 0.333, 1.000,
+        0.000, 0.667, 1.000,
+        0.000, 1.000, 1.000,
+        0.333, 0.000, 1.000,
+        0.333, 0.333, 1.000,
+        0.333, 0.667, 1.000,
+        0.333, 1.000, 1.000,
+        0.667, 0.000, 1.000,
+        0.667, 0.333, 1.000,
+        0.667, 0.667, 1.000,
+        0.667, 1.000, 1.000,
+        1.000, 0.000, 1.000,
+        1.000, 0.333, 1.000,
+        1.000, 0.667, 1.000,
+        0.167, 0.000, 0.000,
+        0.333, 0.000, 0.000,
+        0.500, 0.000, 0.000,
+        0.667, 0.000, 0.000,
+        0.833, 0.000, 0.000,
+        1.000, 0.000, 0.000,
+        0.000, 0.167, 0.000,
+        0.000, 0.333, 0.000,
+        0.000, 0.500, 0.000,
+        0.000, 0.667, 0.000,
+        0.000, 0.833, 0.000,
+        0.000, 1.000, 0.000,
+        0.000, 0.000, 0.167,
+        0.000, 0.000, 0.333,
+        0.000, 0.000, 0.500,
+        0.000, 0.000, 0.667,
+        0.000, 0.000, 0.833,
+        0.000, 0.000, 1.000,
+        0.000, 0.000, 0.000,
+        0.143, 0.143, 0.143,
+        0.286, 0.286, 0.286,
+        0.429, 0.429, 0.429,
+        0.571, 0.571, 0.571,
+        0.714, 0.714, 0.714,
+        0.857, 0.857, 0.857,
+        0.000, 0.447, 0.741,
+        0.50, 0.5, 0
+    ]
+).astype(np.float32)
+color_list = color_list.reshape((-1, 3)) * 255

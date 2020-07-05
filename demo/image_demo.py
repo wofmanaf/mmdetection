@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 
-from mmdet.apis import inference_detector, init_detector, show_result_pyplot
+from mmdet.apis import inference_detector, init_detector
 
 
 def main():
@@ -18,8 +18,9 @@ def main():
     model = init_detector(args.config, args.checkpoint, device=args.device)
     # test a single image
     result = inference_detector(model, args.img)
+
     # show the results
-    show_result_pyplot(model, args.img, result, score_thr=args.score_thr)
+    model.show_result(args.img, result, score_thr=args.score_thr, theme='white', out_file="./demo/demo.png")
 
 
 if __name__ == '__main__':

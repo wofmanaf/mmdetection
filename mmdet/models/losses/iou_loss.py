@@ -1,7 +1,9 @@
+import math
 import torch
 import torch.nn as nn
 
 from mmdet.core import bbox_overlaps
+
 from ..builder import LOSSES
 from .utils import weighted_loss
 
@@ -111,6 +113,114 @@ def giou_loss(pred, target, eps=1e-7):
     # GIoU
     gious = ious - (enclose_area - union) / enclose_area
     loss = 1 - gious
+    return loss
+
+
+@weighted_loss
+def diou_loss(pred, target, eps=1e-7):
+    """
+    Distance-IoU Loss: Faster and Better Learning for Bounding Box Regression
+    https://arxiv.org/abs/1911.08287
+
+    Args:
+        pred (torch.Tensor): Predicted bboxes of format (x1, y1, x2, y2),
+            shape (n, 4).
+        target (torch.Tensor): Corresponding gt bboxes, shape (n, 4).
+        eps (float): Eps to avoid log(0).
+
+    Return:
+        Tensor: Loss tensor.
+    """
+    # overlap
+    lt = torch.max(pred[:, :2], target[:, :2])
+    rb = torch.min(pred[:, 2:], target[:, 2:])
+    wh = (rb - lt).clamp(min=0)
+    overlap = wh[:, 0] * wh[:, 1]
+
+    # union
+    ap = (pred[:, 2] - pred[:, 0]) * (pred[:, 3] - pred[:, 1])
+    ag = (target[:, 2] - target[:, 0]) * (target[:, 3] - target[:, 1])
+    union = ap + ag - overlap + eps
+
+    # IoU
+    ious = overlap / union
+
+    # center point
+    pred_ctrx = (pred[:, 0] + pred[:, 2]) * 0.5
+    pred_ctry = (pred[:, 1] + pred[:, 3]) * 0.5
+
+    target_ctrx = (target[:, 0] + target[:, 2]) * 0.5
+    target_ctry = (target[:, 1] + target[:, 3]) * 0.5
+
+    ctr_dist = (target_ctrx - pred_ctrx) ** 2 + (target_ctry - pred_ctry) ** 2
+
+    # enclose area
+    out_x1y1 = torch.min(pred[:, :2], target[:, :2])
+    out_x2y2 = torch.max(pred[:, 2:], target[:, 2:])
+    out_wh = (out_x2y2 - out_x1y1).clamp(min=0)
+    out_diag = out_wh[:, 0] ** 2 + out_wh[:, 1] ** 2 + eps
+
+    # DIoU
+    dious = ious - ctr_dist / out_diag
+    loss = 1 - dious
+    return loss
+
+
+@weighted_loss
+def ciou_loss(pred, target, eps=1e-7):
+    """
+    Distance-IoU Loss: Faster and Better Learning for Bounding Box Regression
+    https://arxiv.org/abs/1911.08287
+
+    Args:
+        pred (torch.Tensor): Predicted bboxes of format (x1, y1, x2, y2),
+            shape (n, 4).
+        target (torch.Tensor): Corresponding gt bboxes, shape (n, 4).
+        eps (float): Eps to avoid log(0).
+
+    Return:
+        Tensor: Loss tensor.
+    """
+    # overlap
+    lt = torch.max(pred[:, :2], target[:, :2])
+    rb = torch.min(pred[:, 2:], target[:, 2:])
+    wh = (rb - lt).clamp(min=0)
+    overlap = wh[:, 0] * wh[:, 1]
+
+    # union
+    ap = (pred[:, 2] - pred[:, 0]) * (pred[:, 3] - pred[:, 1])
+    ag = (target[:, 2] - target[:, 0]) * (target[:, 3] - target[:, 1])
+    union = ap + ag - overlap + eps
+
+    # IoU
+    ious = overlap / union
+
+    # center point
+    pred_ctrx = (pred[:, 0] + pred[:, 2]) * 0.5
+    pred_ctry = (pred[:, 1] + pred[:, 3]) * 0.5
+
+    target_ctrx = (target[:, 0] + target[:, 2]) * 0.5
+    target_ctry = (target[:, 1] + target[:, 3]) * 0.5
+
+    ctr_dist = (target_ctrx - pred_ctrx) ** 2 + (target_ctry - pred_ctry) ** 2
+
+    # enclose area
+    out_x1y1 = torch.min(pred[:, :2], target[:, :2])
+    out_x2y2 = torch.max(pred[:, 2:], target[:, 2:])
+    out_wh = (out_x2y2 - out_x1y1).clamp(min=0)
+    out_diag = out_wh[:, 0] ** 2 + out_wh[:, 1] ** 2 + eps
+
+    pred_wh = (pred[:, 2:] - pred[:, :2]).clamp(min=0) + eps
+    target_wh = (target[:, 2:] - target[:, :2]).clamp(min=0) + eps
+    at = torch.atan(target_wh[:, 1] / target_wh[:, 0]) - torch.atan(pred_wh[:, 1] / pred_wh[:, 0])
+    v = (4 / math.pi ** 2) * torch.pow(at, 2)
+
+    with torch.no_grad():
+        alpha = v / (1 - ious + v)
+
+    # CIoU
+    cious = ious - (ctr_dist / out_diag + alpha * v)
+    loss = 1 - cious
     return loss
 
 
@@ -237,6 +347,82 @@ class GIoULoss(nn.Module):
             assert weight.shape == pred.shape
             weight = weight.mean(-1)
         loss = self.loss_weight * giou_loss(
+            pred,
+            target,
+            weight,
+            eps=self.eps,
+            reduction=reduction,
+            avg_factor=avg_factor,
+            **kwargs)
+        return loss
+
+
+@LOSSES.register_module()
+class DIoULoss(nn.Module):
+
+    def __init__(self, eps=1e-6, reduction='mean', loss_weight=1.0):
+        super(DIoULoss, self).__init__()
+        self.eps = eps
+        self.reduction = reduction
+        self.loss_weight = loss_weight
+
+    def forward(self,
+                pred,
+                target,
+                weight=None,
+                avg_factor=None,
+                reduction_override=None,
+                **kwargs):
+        if weight is not None and not torch.any(weight > 0):
+            return (pred * weight).sum()  # 0
+        assert reduction_override in (None, 'none', 'mean', 'sum')
+        reduction = (
+            reduction_override if reduction_override else self.reduction)
+        if weight is not None and weight.dim() > 1:
+            # TODO: remove this in the future
+            # reduce the weight of shape (n, 4) to (n,) to match the
+            # diou_loss of shape (n,)
+            assert weight.shape == pred.shape
+            weight = weight.mean(-1)
+        loss = self.loss_weight * diou_loss(
+            pred,
+            target,
+            weight,
+            eps=self.eps,
+            reduction=reduction,
+            avg_factor=avg_factor,
+            **kwargs)
+        return loss
+
+
+@LOSSES.register_module()
+class CIoULoss(nn.Module):
+
+    def __init__(self, eps=1e-6, reduction='mean', loss_weight=1.0):
+        super(CIoULoss, self).__init__()
+        self.eps = eps
+        self.reduction = reduction
+        self.loss_weight = loss_weight
+
+    def forward(self,
+                pred,
+                target,
+                weight=None,
+                avg_factor=None,
+                reduction_override=None,
+                **kwargs):
+        if weight is not None and not torch.any(weight > 0):
+            return (pred * weight).sum()  # 0
+        assert reduction_override in (None, 'none', 'mean', 'sum')
+        reduction = (
+            reduction_override if reduction_override else self.reduction)
+        if weight is not None and weight.dim() > 1:
+            # TODO: remove this in the future
+            # reduce the weight of shape (n, 4) to (n,) to match the
+            # ciou_loss of shape (n,)
+            assert weight.shape == pred.shape
+            weight = weight.mean(-1)
+        loss = self.loss_weight * ciou_loss(
             pred,
             target,
             weight,
