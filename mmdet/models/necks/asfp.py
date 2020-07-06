@@ -87,25 +87,6 @@ class ASFP(nn.Module):
             if isinstance(m, nn.Conv2d):
                 xavier_init(m, distribution='uniform')
 
-    # def slice_as(self, src, dst):
-    #     """Slice ``src`` as ``dst``
-    #     Note:
-    #         ``src`` should have the same or larger size than ``dst``.
-    #
-    #     Args:
-    #         src (torch.Tensor): Tensors to be sliced.
-    #         dst (torch.Tensor): ``src`` will be sliced to have the same
-    #             size as ``dst``.
-    #
-    #     Returns:
-    #         torch.Tensor: Sliced tensor.
-    #     """
-    #     assert (src.size(2) >= dst.size(2)) and (src.size(3) >= dst.size(3))
-    #     if src.size(2) == dst.size(2) and src.size(3) == dst.size(3):
-    #         return src
-    #     else:
-    #         return src[:, :, :dst.size(2), :dst.size(3)]
-
     def forward(self, inputs):
         """Forward function"""
         assert len(inputs) == self.num_levels

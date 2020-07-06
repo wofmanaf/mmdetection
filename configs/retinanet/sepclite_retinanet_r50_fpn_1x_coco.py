@@ -15,7 +15,7 @@ model = dict(
             Pconv_num=4,
             pconv_deform=False,
             lcconv_deform=True,
-            iBN=True, )
+            iBN=False, )
     ],
     bbox_head=dict(
         type='SEPCRetinaHead',

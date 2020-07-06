@@ -110,8 +110,9 @@ class PConvModule(nn.Module):
             if level > 0:
                 temp_fea += self.Pconv[2](level, x[level - 1])
             if level < len(x) - 1:
-                temp_fea += F.upsample_bilinear(self.Pconv[0](level, x[level + 1]),
-                                                size=[temp_fea.size(2), temp_fea.size(3)])
+                temp_fea += F.interpolate(self.Pconv[0](level, x[level + 1]),
+                                          size=[temp_fea.size(2), temp_fea.size(3)],
+                                          mode='bilinear')
             next_x.append(temp_fea)
         if self.iBN:
             next_x = iBN(next_x, self.bn)
