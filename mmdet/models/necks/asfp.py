@@ -50,13 +50,12 @@ class ASFP(nn.Module):
 
         self.asfp_convs = nn.ModuleList()
         for i in range(self.num_levels):
-            asfp_conv = ConvModule(
+            asfp_conv = nn.Conv2d(
                 self.in_channels,
                 self.in_channels,
-                3,
-                padding=1,
-                conv_cfg=conv_cfg,
-                norm_cfg=norm_cfg)
+                kernel_size=3,
+                padding=1
+            )
             self.asfp_convs.append(asfp_conv)
 
         if self.refine_type == 'conv':
@@ -75,11 +74,11 @@ class ASFP(nn.Module):
                 conv_cfg=self.conv_cfg,
                 norm_cfg=self.norm_cfg)
         self.ws = []
-        self.bs = []
+        # self.bs = []
 
         for i in range(self.num_levels):
             self.ws.append(Parameter(torch.ones(1, self.in_channels, 1, 1).cuda()))
-            self.bs.append(Parameter(torch.zeros(1, self.in_channels, 1, 1).cuda()))
+            # self.bs.append(Parameter(torch.zeros(1, self.in_channels, 1, 1).cuda()))
 
     def init_weights(self):
         """Initialize the weights of FPN module"""
@@ -96,7 +95,8 @@ class ASFP(nn.Module):
         feats = []
         gather_size = inputs[self.refine_level].size()[2:]
         for i in range(self.num_levels):
-            gathered = self.ws[i] * inputs[i] + self.bs[i]
+            # gathered = self.ws[i] * inputs[i] + self.bs[i]
+            gathered = self.ws[i] * inputs[i]
             gates.append(nn.Sigmoid()(gathered))
             if i < self.refine_level:
                 gathered = F.adaptive_max_pool2d(gathered, output_size=gather_size)
@@ -119,6 +119,7 @@ class ASFP(nn.Module):
             else:
                 residual = F.adaptive_max_pool2d(bsf, output_size=out_size)
             residual = self.asfp_convs[i](residual)
-            outs.append(gates[i] * inputs[i] + (1 - gates[i]) * residual)
+            # outs.append(gates[i] * inputs[i] + (1 - gates[i]) * residual)
+            outs.append(inputs[i] + residual)
 
         return tuple(outs)
